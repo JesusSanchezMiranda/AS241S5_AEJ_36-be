@@ -26,6 +26,18 @@ public class AiImageServiceImpl implements AiImageService {
     @Value("${rapidapi.key}")
     private String rapidApiKey;
 
+    @Value("${rapidapi.colorize.url}")
+    private String colorizeUrl;
+
+    @Value("${rapidapi.colorize.host}")
+    private String colorizeHost;
+
+    @Value("${rapidapi.remove-bg.url}")
+    private String removeBgUrl;
+
+    @Value("${rapidapi.remove-bg.host}")
+    private String removeBgHost;
+
     // Primer API colorizacion de Imagenes
     @Override
     public Mono<AiImageResult> colorizePhoto(FilePart file) {
@@ -50,9 +62,9 @@ public class AiImageServiceImpl implements AiImageService {
                     builder.part("saturation", "1.1");
 
                     return webClient.post()
-                            .uri("https://colorize-photo1.p.rapidapi.com/colorize_image_with_auto_prompt")
+                            .uri(colorizeUrl)
                             .header("x-rapidapi-key", rapidApiKey)
-                            .header("x-rapidapi-host", "colorize-photo1.p.rapidapi.com")
+                            .header("x-rapidapi-host", colorizeHost)
                             .contentType(MediaType.MULTIPART_FORM_DATA)
                             .bodyValue(builder.build())
                             .retrieve()
@@ -117,9 +129,9 @@ public class AiImageServiceImpl implements AiImageService {
                     System.out.println(">>> PASO 2 - Llamando a RapidAPI...");
 
                     return webClient.post()
-                            .uri("https://ai-background-remover.p.rapidapi.com/image/matte/v1")
+                            .uri(removeBgUrl)
                             .header("x-rapidapi-key", rapidApiKey)
-                            .header("x-rapidapi-host", "ai-background-remover.p.rapidapi.com")
+                            .header("x-rapidapi-host", removeBgHost)
                             .contentType(MediaType.MULTIPART_FORM_DATA)
                             .bodyValue(builder.build())
                             .retrieve()

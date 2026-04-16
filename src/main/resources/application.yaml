@@ -21,3 +21,9 @@ springdoc:
 
 rapidapi:
   key: a778c508d5msh20dbea8a628c75bp13641ajsnb57647a717a0
+  colorize:
+    url: https://colorize-photo1.p.rapidapi.com/colorize_image_with_auto_prompt
+    host: colorize-photo1.p.rapidapi.com
+  remove-bg:
+    url: https://ai-background-remover.p.rapidapi.com/image/matte/v1
+    host: ai-background-remover.p.rapidapi.com
