@@ -1,0 +1,23 @@
+# kubectl apply -f jesus-sanchez-36-deployment.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jesus-sanchez-36-deployment
+  namespace: jesus-sanchez-36-namespace
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: jesus-sanchez-36-deployment        # Debe coincidir con las etiquetas del Service
+  template:
+    metadata:
+      labels:
+        app: jesus-sanchez-36-deployment      # Debe coincidir con las etiquetas del Service
+    spec:
+      containers:
+      - name: jesus-sanchez-36-container
+        image: jesusmiguelsanchez/kubernetes-be:1.0   # Reemplaza con tu imagen Docker Hub
+        imagePullPolicy: IfNotPresent        # Evitar traer siempre la última versión si hay una actual
+        envFrom:
+        - secretRef:
+            name: jesus-sanchez-36-secret  # Esto cargará todos los valores como variables de entorno
