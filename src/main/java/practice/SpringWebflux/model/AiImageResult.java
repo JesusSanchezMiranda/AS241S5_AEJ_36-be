@@ -29,5 +29,20 @@ public class AiImageResult {
 
     @Column("created_at")
     private LocalDateTime createdAt;
-    
+
+    @Column("name")
+    private String name;
+
+    @Column("description")
+    private String description;
+
+    @Column("archived")
+    private Boolean archived = false;
+
+    @Column("updated_at")
+    private LocalDateTime updatedAt;
+
+    @Column("input_saved_url")
+    private String inputSavedUrl;
+
 }

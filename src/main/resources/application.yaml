@@ -1,11 +1,11 @@
 server:
-  port: ${PORT}
+  port: 8082
 
 spring:
   r2dbc:
-    url: ${DATABASE_URL}
-    username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
+    url: r2dbc:postgresql://ep-fragrant-wind-a4b5z548-pooler.us-east-1.aws.neon.tech/neondb?sslMode=REQUIRE
+    username: neondb_owner
+    password: npg_4RATbJDKU1Sv
   
 logging:
   level:
@@ -20,10 +20,10 @@ springdoc:
     path: /swagger-ui.html
 
 rapidapi:
-  key: ${RAPIDAPI_APIKEY}
+  key: a778c508d5msh20dbea8a628c75bp13641ajsnb57647a717a0
   colorize:
-    url: ${RAPIDAPI_COLORIZE_URL}
-    host: ${RAPIDAPI_COLORIZE_HOST}
+    url: https://colorize-photo1.p.rapidapi.com/colorize_image_with_auto_prompt
+    host: colorize-photo1.p.rapidapi.com
   remove-bg:
-    url: ${RAPIDAPI_REMOVEBG_URL}
-    host: ${RAPIDAPI_REMOVEBG_HOST}
+    url: https://ai-background-remover.p.rapidapi.com/image/matte/v1
+    host: ai-background-remover.p.rapidapi.com

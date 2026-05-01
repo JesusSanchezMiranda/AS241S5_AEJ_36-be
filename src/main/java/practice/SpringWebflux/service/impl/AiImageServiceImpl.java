@@ -40,13 +40,26 @@ public class AiImageServiceImpl implements AiImageService {
 
     // Primer API colorizacion de Imagenes
     @Override
-    public Mono<AiImageResult> colorizePhoto(FilePart file) {
+    public Mono<AiImageResult> colorizePhoto(FilePart file, String name, String description) {
 
         return DataBufferUtils.join(file.content())
                 .flatMap(dataBuffer -> {
                     byte[] imageBytes = new byte[dataBuffer.readableByteCount()];
                     dataBuffer.read(imageBytes);
                     DataBufferUtils.release(dataBuffer);
+
+                    // Guardar input aquí donde imageBytes está disponible
+                    String inputFilename = "input_" + System.currentTimeMillis() + "_" + file.filename();
+                    String inputPath = "input/" + inputFilename;
+                    try {
+                        java.nio.file.Files.createDirectories(java.nio.file.Paths.get("input"));
+                        java.nio.file.Files.write(java.nio.file.Paths.get(inputPath), imageBytes);
+                        System.out.println(">>> INPUT GUARDADO EN: " + inputPath);
+                    } catch (Exception e) {
+                        System.out.println(">>> ERROR GUARDANDO INPUT: " + e.getMessage());
+                    }
+
+                    final String savedInputPath = inputPath;
 
                     MultipartBodyBuilder builder = new MultipartBodyBuilder();
                     builder.part("image", imageBytes)
@@ -68,28 +81,33 @@ public class AiImageServiceImpl implements AiImageService {
                             .contentType(MediaType.MULTIPART_FORM_DATA)
                             .bodyValue(builder.build())
                             .retrieve()
-                            .bodyToMono(byte[].class); // ← recibir como bytes, no String
+                            .bodyToMono(byte[].class)
+                            .map(outputBytes -> new Object[] { outputBytes, savedInputPath });
                 })
-                .flatMap(imageResultBytes -> {
-                    // Guardar el archivo en disco y devolver la ruta
+                .flatMap(pair -> {
+                    byte[] imageResultBytes = (byte[]) pair[0];
+                    String savedInputPath = (String) pair[1];
+
                     String filename = "colorized_" + System.currentTimeMillis() + ".jpg";
                     String outputPath = "output/" + filename;
 
                     try {
-                        // Crear carpeta si no existe
                         java.nio.file.Files.createDirectories(java.nio.file.Paths.get("output"));
-                        // Guardar imagen en disco
                         java.nio.file.Files.write(java.nio.file.Paths.get(outputPath), imageResultBytes);
-                        System.out.println(">>> IMAGEN GUARDADA EN: " + outputPath);
+                        System.out.println(">>> OUTPUT GUARDADO EN: " + outputPath);
                     } catch (Exception e) {
-                        System.out.println(">>> ERROR GUARDANDO: " + e.getMessage());
+                        System.out.println(">>> ERROR GUARDANDO OUTPUT: " + e.getMessage());
                     }
 
                     AiImageResult result = new AiImageResult();
                     result.setApiName("colorize");
                     result.setInputUrl(file.filename());
-                    result.setOutputUrl(outputPath); // ← ruta local del archivo
+                    result.setInputSavedUrl(savedInputPath);
+                    result.setName(name);
+                    result.setDescription(description);
+                    result.setOutputUrl(outputPath);
                     result.setStatus("SUCCESS");
+                    result.setArchived(false);
                     result.setCreatedAt(LocalDateTime.now());
                     return repository.save(result);
                 })
@@ -104,13 +122,14 @@ public class AiImageServiceImpl implements AiImageService {
                     error.setInputUrl(file.filename());
                     error.setOutputUrl(null);
                     error.setStatus("ERROR");
+                    error.setArchived(false);
                     error.setCreatedAt(LocalDateTime.now());
                     return repository.save(error);
                 });
     }
 
     @Override
-    public Mono<AiImageResult> removeBackground(FilePart file) {
+    public Mono<AiImageResult> removeBackground(FilePart file, String name, String description) {
 
         return DataBufferUtils.join(file.content())
                 .flatMap(dataBuffer -> {
@@ -119,6 +138,19 @@ public class AiImageServiceImpl implements AiImageService {
                     DataBufferUtils.release(dataBuffer);
 
                     System.out.println(">>> PASO 1 - Imagen leída, bytes: " + imageBytes.length);
+
+                    // Guardar input aquí donde imageBytes está disponible
+                    String inputFilename = "input_" + System.currentTimeMillis() + "_" + file.filename();
+                    String inputPath = "input/" + inputFilename;
+                    try {
+                        java.nio.file.Files.createDirectories(java.nio.file.Paths.get("input"));
+                        java.nio.file.Files.write(java.nio.file.Paths.get(inputPath), imageBytes);
+                        System.out.println(">>> INPUT GUARDADO EN: " + inputPath);
+                    } catch (Exception e) {
+                        System.out.println(">>> ERROR GUARDANDO INPUT: " + e.getMessage());
+                    }
+
+                    final String savedInputPath = inputPath;
 
                     MultipartBodyBuilder builder = new MultipartBodyBuilder();
                     builder.part("image", imageBytes)
@@ -135,7 +167,7 @@ public class AiImageServiceImpl implements AiImageService {
                             .contentType(MediaType.MULTIPART_FORM_DATA)
                             .bodyValue(builder.build())
                             .retrieve()
-                            .toEntity(byte[].class) // ← cambiado para ver headers + body
+                            .toEntity(byte[].class)
                             .doOnNext(entity -> {
                                 System.out.println(">>> PASO 3 - Status: " + entity.getStatusCode());
                                 System.out
@@ -143,34 +175,40 @@ public class AiImageServiceImpl implements AiImageService {
                                 byte[] body = entity.getBody();
                                 if (body != null) {
                                     System.out.println(">>> PASO 3 - Bytes recibidos: " + body.length);
-                                    // ver si empieza con JPEG, PNG o JSON
                                     String preview = new String(body, 0, Math.min(50, body.length));
                                     System.out.println(">>> PASO 3 - Preview: " + preview);
                                 } else {
                                     System.out.println(">>> PASO 3 - Body es NULL");
                                 }
                             })
-                            .map(entity -> entity.getBody());
+                            .map(entity -> new Object[] { entity.getBody(), savedInputPath });
                 })
-                .flatMap(imageResultBytes -> {
-                    System.out.println(">>> PASO 4 - Guardando imagen, bytes: " + imageResultBytes.length);
+                .flatMap(pair -> {
+                    byte[] imageResultBytes = (byte[]) pair[0];
+                    String savedInputPath = (String) pair[1];
 
-                    String filename = "removebg_" + System.currentTimeMillis() + ".png";
-                    String outputPath = "output/" + filename;
+                    System.out.println(">>> PASO 4 - Guardando output, bytes: " + imageResultBytes.length);
+
+                    String outputFilename = "removebg_" + System.currentTimeMillis() + ".png";
+                    String outputPath = "output/" + outputFilename;
 
                     try {
                         java.nio.file.Files.createDirectories(java.nio.file.Paths.get("output"));
                         java.nio.file.Files.write(java.nio.file.Paths.get(outputPath), imageResultBytes);
-                        System.out.println(">>> PASO 4 - Imagen guardada en: " + outputPath);
+                        System.out.println(">>> PASO 4 - Output guardado en: " + outputPath);
                     } catch (Exception e) {
-                        System.out.println(">>> PASO 4 - Error guardando: " + e.getMessage());
+                        System.out.println(">>> PASO 4 - Error guardando output: " + e.getMessage());
                     }
 
                     AiImageResult result = new AiImageResult();
                     result.setApiName("remove-bg");
+                    result.setName(name);
+                    result.setDescription(description);
                     result.setInputUrl(file.filename());
+                    result.setInputSavedUrl(savedInputPath);
                     result.setOutputUrl(outputPath);
                     result.setStatus("SUCCESS");
+                    result.setArchived(false);
                     result.setCreatedAt(LocalDateTime.now());
                     return repository.save(result);
                 })
@@ -189,9 +227,51 @@ public class AiImageServiceImpl implements AiImageService {
                     error.setInputUrl(file.filename());
                     error.setOutputUrl(null);
                     error.setStatus("ERROR");
+                    error.setArchived(false);
                     error.setCreatedAt(LocalDateTime.now());
                     return repository.save(error);
                 });
+    }
+
+    @Override
+    public Flux<AiImageResult> getActiveByApi(String apiName) {
+        return repository.findByApiNameAndArchived(apiName, false);
+    }
+
+    @Override
+    public Mono<AiImageResult> updateNameAndDescription(Long id, String name, String description) {
+        return repository.findById(id)
+                .flatMap(result -> {
+                    result.setName(name);
+                    result.setDescription(description);
+                    result.setUpdatedAt(LocalDateTime.now());
+                    return repository.save(result);
+                });
+    }
+
+    @Override
+    public Mono<AiImageResult> archive(Long id) {
+        return repository.findById(id)
+                .flatMap(result -> {
+                    result.setArchived(true);
+                    result.setUpdatedAt(LocalDateTime.now());
+                    return repository.save(result);
+                });
+    }
+
+    @Override
+    public Mono<AiImageResult> unarchive(Long id) {
+        return repository.findById(id)
+                .flatMap(result -> {
+                    result.setArchived(false);
+                    result.setUpdatedAt(LocalDateTime.now());
+                    return repository.save(result);
+                });
+    }
+
+    @Override
+    public Mono<Void> delete(Long id) {
+        return repository.deleteById(id);
     }
 
     // Consulta de los resultados a la BD
@@ -203,5 +283,10 @@ public class AiImageServiceImpl implements AiImageService {
     @Override
     public Flux<AiImageResult> getResultsByApi(String apiName) {
         return repository.findByApiName(apiName);
+    }
+
+    @Override
+    public Flux<AiImageResult> getArchivedByApi(String apiName) {
+        return repository.findByApiNameAndArchived(apiName, true);
     }
 }
