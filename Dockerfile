@@ -1,13 +1,18 @@
 # Stage 1: Build with Maven
-FROM maven:3.9.0-eclipse-temurin-17-alpine AS builder
+FROM maven:3.9.9-eclipse-temurin-17-alpine AS builder
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Stage 2: Run with Java
-FROM amazoncorretto:17-alpine-jdk
+FROM eclipse-temurin:17.0.15_6-jre-alpine  
 WORKDIR /app
+
+# Usuario no-root (buena práctica de seguridad)
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
 COPY --from=builder /app/target/*.jar app.jar
 ENTRYPOINT ["java", "-jar", "app.jar"]
 
