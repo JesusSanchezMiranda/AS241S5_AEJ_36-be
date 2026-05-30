@@ -20,7 +20,7 @@ public class CorsConfig {
             ServerHttpResponse response = exchange.getResponse();
             HttpHeaders headers = response.getHeaders();
 
-            headers.add("Access-Control-Allow-Origin", "http://localhost:4200");
+            headers.add("Access-Control-Allow-Origin", "*");
             headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
             headers.add("Access-Control-Allow-Headers", "*");
             headers.add("Access-Control-Max-Age", "3600");
