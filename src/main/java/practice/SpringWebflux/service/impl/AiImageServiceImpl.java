@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import practice.SpringWebflux.model.AiImageResult;
 import practice.SpringWebflux.repository.AiImageResultRepository;
 import practice.SpringWebflux.service.AiImageService;
+import practice.SpringWebflux.service.CloudinaryService;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -22,6 +23,7 @@ import reactor.core.publisher.Mono;
 public class AiImageServiceImpl implements AiImageService {
     private final AiImageResultRepository repository;
     private final WebClient webClient;
+    private final CloudinaryService cloudinaryService;
 
     @Value("${rapidapi.key}")
     private String rapidApiKey;
@@ -48,68 +50,53 @@ public class AiImageServiceImpl implements AiImageService {
                     dataBuffer.read(imageBytes);
                     DataBufferUtils.release(dataBuffer);
 
-                    // Guardar input aquí donde imageBytes está disponible
-                    String inputFilename = "input_" + System.currentTimeMillis() + "_" + file.filename();
-                    String inputPath = "input/" + inputFilename;
-                    try {
-                        java.nio.file.Files.createDirectories(java.nio.file.Paths.get("input"));
-                        java.nio.file.Files.write(java.nio.file.Paths.get(inputPath), imageBytes);
-                        System.out.println(">>> INPUT GUARDADO EN: " + inputPath);
-                    } catch (Exception e) {
-                        System.out.println(">>> ERROR GUARDANDO INPUT: " + e.getMessage());
-                    }
+                    String inputPublicId = "input_" + System.currentTimeMillis() + "_" + file.filename();
 
-                    final String savedInputPath = inputPath;
+                    // Subir input a Cloudinary
+                    return cloudinaryService.upload(imageBytes, "input", inputPublicId)
+                            .flatMap(inputUrl -> {
 
-                    MultipartBodyBuilder builder = new MultipartBodyBuilder();
-                    builder.part("image", imageBytes)
-                            .filename(file.filename())
-                            .contentType(MediaType.IMAGE_JPEG);
-                    builder.part("temperature", "-0.1");
-                    builder.part("raw_captions", "false");
-                    builder.part("standard_filter_id", "1");
-                    builder.part("white_balance", "false");
-                    builder.part("resolution", "watermarked-sd");
-                    builder.part("auto_color", "true");
-                    builder.part("artistic_filter_id", "0");
-                    builder.part("saturation", "1.1");
+                                MultipartBodyBuilder builder = new MultipartBodyBuilder();
+                                builder.part("image", imageBytes)
+                                        .filename(file.filename())
+                                        .contentType(MediaType.IMAGE_JPEG);
+                                builder.part("temperature", "-0.1");
+                                builder.part("raw_captions", "false");
+                                builder.part("standard_filter_id", "1");
+                                builder.part("white_balance", "false");
+                                builder.part("resolution", "watermarked-sd");
+                                builder.part("auto_color", "true");
+                                builder.part("artistic_filter_id", "0");
+                                builder.part("saturation", "1.1");
 
-                    return webClient.post()
-                            .uri(colorizeUrl)
-                            .header("x-rapidapi-key", rapidApiKey)
-                            .header("x-rapidapi-host", colorizeHost)
-                            .contentType(MediaType.MULTIPART_FORM_DATA)
-                            .bodyValue(builder.build())
-                            .retrieve()
-                            .bodyToMono(byte[].class)
-                            .map(outputBytes -> new Object[] { outputBytes, savedInputPath });
-                })
-                .flatMap(pair -> {
-                    byte[] imageResultBytes = (byte[]) pair[0];
-                    String savedInputPath = (String) pair[1];
+                                return webClient.post()
+                                        .uri(colorizeUrl)
+                                        .header("x-rapidapi-key", rapidApiKey)
+                                        .header("x-rapidapi-host", colorizeHost)
+                                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                                        .bodyValue(builder.build())
+                                        .retrieve()
+                                        .bodyToMono(byte[].class)
+                                        .flatMap(outputBytes -> {
+                                            String outputPublicId = "colorized_" + System.currentTimeMillis();
 
-                    String filename = "colorized_" + System.currentTimeMillis() + ".jpg";
-                    String outputPath = "output/" + filename;
-
-                    try {
-                        java.nio.file.Files.createDirectories(java.nio.file.Paths.get("output"));
-                        java.nio.file.Files.write(java.nio.file.Paths.get(outputPath), imageResultBytes);
-                        System.out.println(">>> OUTPUT GUARDADO EN: " + outputPath);
-                    } catch (Exception e) {
-                        System.out.println(">>> ERROR GUARDANDO OUTPUT: " + e.getMessage());
-                    }
-
-                    AiImageResult result = new AiImageResult();
-                    result.setApiName("colorize");
-                    result.setInputUrl(file.filename());
-                    result.setInputSavedUrl(savedInputPath);
-                    result.setName(name);
-                    result.setDescription(description);
-                    result.setOutputUrl(outputPath);
-                    result.setStatus("SUCCESS");
-                    result.setArchived(false);
-                    result.setCreatedAt(LocalDateTime.now());
-                    return repository.save(result);
+                                            // Subir output a Cloudinary
+                                            return cloudinaryService.upload(outputBytes, "output", outputPublicId)
+                                                    .flatMap(outputUrl -> {
+                                                        AiImageResult result = new AiImageResult();
+                                                        result.setApiName("colorize");
+                                                        result.setInputUrl(file.filename());
+                                                        result.setInputSavedUrl(inputUrl);
+                                                        result.setName(name);
+                                                        result.setDescription(description);
+                                                        result.setOutputUrl(outputUrl);
+                                                        result.setStatus("SUCCESS");
+                                                        result.setArchived(false);
+                                                        result.setCreatedAt(LocalDateTime.now());
+                                                        return repository.save(result);
+                                                    });
+                                        });
+                            });
                 })
                 .onErrorResume(ex -> {
                     if (ex instanceof org.springframework.web.reactive.function.client.WebClientResponseException wcEx) {
@@ -139,78 +126,64 @@ public class AiImageServiceImpl implements AiImageService {
 
                     System.out.println(">>> PASO 1 - Imagen leída, bytes: " + imageBytes.length);
 
-                    // Guardar input aquí donde imageBytes está disponible
-                    String inputFilename = "input_" + System.currentTimeMillis() + "_" + file.filename();
-                    String inputPath = "input/" + inputFilename;
-                    try {
-                        java.nio.file.Files.createDirectories(java.nio.file.Paths.get("input"));
-                        java.nio.file.Files.write(java.nio.file.Paths.get(inputPath), imageBytes);
-                        System.out.println(">>> INPUT GUARDADO EN: " + inputPath);
-                    } catch (Exception e) {
-                        System.out.println(">>> ERROR GUARDANDO INPUT: " + e.getMessage());
-                    }
+                    String inputPublicId = "input_" + System.currentTimeMillis() + "_" + file.filename();
 
-                    final String savedInputPath = inputPath;
+                    // Subir input a Cloudinary
+                    return cloudinaryService.upload(imageBytes, "input", inputPublicId)
+                            .flatMap(inputUrl -> {
 
-                    MultipartBodyBuilder builder = new MultipartBodyBuilder();
-                    builder.part("image", imageBytes)
-                            .filename(file.filename())
-                            .contentType(MediaType.IMAGE_JPEG);
-                    builder.part("model", "falcon");
+                                MultipartBodyBuilder builder = new MultipartBodyBuilder();
+                                builder.part("image", imageBytes)
+                                        .filename(file.filename())
+                                        .contentType(MediaType.IMAGE_JPEG);
+                                builder.part("model", "falcon");
 
-                    System.out.println(">>> PASO 2 - Llamando a RapidAPI...");
+                                System.out.println(">>> PASO 2 - Llamando a RapidAPI...");
 
-                    return webClient.post()
-                            .uri(removeBgUrl)
-                            .header("x-rapidapi-key", rapidApiKey)
-                            .header("x-rapidapi-host", removeBgHost)
-                            .contentType(MediaType.MULTIPART_FORM_DATA)
-                            .bodyValue(builder.build())
-                            .retrieve()
-                            .toEntity(byte[].class)
-                            .doOnNext(entity -> {
-                                System.out.println(">>> PASO 3 - Status: " + entity.getStatusCode());
-                                System.out
-                                        .println(">>> PASO 3 - Content-Type: " + entity.getHeaders().getContentType());
-                                byte[] body = entity.getBody();
-                                if (body != null) {
-                                    System.out.println(">>> PASO 3 - Bytes recibidos: " + body.length);
-                                    String preview = new String(body, 0, Math.min(50, body.length));
-                                    System.out.println(">>> PASO 3 - Preview: " + preview);
-                                } else {
-                                    System.out.println(">>> PASO 3 - Body es NULL");
-                                }
-                            })
-                            .map(entity -> new Object[] { entity.getBody(), savedInputPath });
-                })
-                .flatMap(pair -> {
-                    byte[] imageResultBytes = (byte[]) pair[0];
-                    String savedInputPath = (String) pair[1];
+                                return webClient.post()
+                                        .uri(removeBgUrl)
+                                        .header("x-rapidapi-key", rapidApiKey)
+                                        .header("x-rapidapi-host", removeBgHost)
+                                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                                        .bodyValue(builder.build())
+                                        .retrieve()
+                                        .toEntity(byte[].class)
+                                        .doOnNext(entity -> {
+                                            System.out.println(">>> PASO 3 - Status: " + entity.getStatusCode());
+                                            System.out.println(">>> PASO 3 - Content-Type: "
+                                                    + entity.getHeaders().getContentType());
+                                            byte[] body = entity.getBody();
+                                            if (body != null) {
+                                                System.out.println(">>> PASO 3 - Bytes recibidos: " + body.length);
+                                                String preview = new String(body, 0, Math.min(50, body.length));
+                                                System.out.println(">>> PASO 3 - Preview: " + preview);
+                                            } else {
+                                                System.out.println(">>> PASO 3 - Body es NULL");
+                                            }
+                                        })
+                                        .flatMap(entity -> {
+                                            byte[] imageResultBytes = entity.getBody();
+                                            System.out.println(">>> PASO 4 - Subiendo output a Cloudinary...");
 
-                    System.out.println(">>> PASO 4 - Guardando output, bytes: " + imageResultBytes.length);
+                                            String outputPublicId = "removebg_" + System.currentTimeMillis();
 
-                    String outputFilename = "removebg_" + System.currentTimeMillis() + ".png";
-                    String outputPath = "output/" + outputFilename;
-
-                    try {
-                        java.nio.file.Files.createDirectories(java.nio.file.Paths.get("output"));
-                        java.nio.file.Files.write(java.nio.file.Paths.get(outputPath), imageResultBytes);
-                        System.out.println(">>> PASO 4 - Output guardado en: " + outputPath);
-                    } catch (Exception e) {
-                        System.out.println(">>> PASO 4 - Error guardando output: " + e.getMessage());
-                    }
-
-                    AiImageResult result = new AiImageResult();
-                    result.setApiName("remove-bg");
-                    result.setName(name);
-                    result.setDescription(description);
-                    result.setInputUrl(file.filename());
-                    result.setInputSavedUrl(savedInputPath);
-                    result.setOutputUrl(outputPath);
-                    result.setStatus("SUCCESS");
-                    result.setArchived(false);
-                    result.setCreatedAt(LocalDateTime.now());
-                    return repository.save(result);
+                                            // Subir output a Cloudinary
+                                            return cloudinaryService.upload(imageResultBytes, "output", outputPublicId)
+                                                    .flatMap(outputUrl -> {
+                                                        AiImageResult result = new AiImageResult();
+                                                        result.setApiName("remove-bg");
+                                                        result.setName(name);
+                                                        result.setDescription(description);
+                                                        result.setInputUrl(file.filename());
+                                                        result.setInputSavedUrl(inputUrl);
+                                                        result.setOutputUrl(outputUrl);
+                                                        result.setStatus("SUCCESS");
+                                                        result.setArchived(false);
+                                                        result.setCreatedAt(LocalDateTime.now());
+                                                        return repository.save(result);
+                                                    });
+                                        });
+                            });
                 })
                 .onErrorResume(ex -> {
                     System.out.println(">>> FALLO EN PASO: " + ex.getClass().getSimpleName());

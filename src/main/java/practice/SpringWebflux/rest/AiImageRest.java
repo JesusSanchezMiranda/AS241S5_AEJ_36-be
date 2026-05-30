@@ -59,22 +59,6 @@ public class AiImageRest {
         return aiImageService.getResultsByApi(apiName);
     }
 
-    @GetMapping("/output/{filename}")
-    public Mono<ResponseEntity<Resource>> getImage(@PathVariable String filename) {
-        var file = new FileSystemResource("output/" + filename);
-
-        if (!file.exists()) {
-            return Mono.just(ResponseEntity.notFound().build());
-        }
-
-        // detecta el tipo según extensión
-        String contentType = filename.endsWith(".png") ? "image/png" : "image/jpeg";
-
-        return Mono.just(ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_TYPE, contentType)
-                .body((Resource) file));
-    }
-
     // GET activos por api (no archivados)
     @GetMapping("/results/{apiName}/active")
     public Flux<AiImageResult> getActiveByApi(@PathVariable String apiName) {
@@ -116,18 +100,4 @@ public class AiImageRest {
                 .then(Mono.just(ResponseEntity.<Void>noContent().build()));
     }
 
-    @GetMapping("/input/{filename}")
-    public Mono<ResponseEntity<Resource>> getInputImage(@PathVariable String filename) {
-        var file = new FileSystemResource("input/" + filename);
-
-        if (!file.exists()) {
-            return Mono.just(ResponseEntity.notFound().build());
-        }
-
-        String contentType = filename.endsWith(".png") ? "image/png" : "image/jpeg";
-
-        return Mono.just(ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_TYPE, contentType)
-                .body((Resource) file));
-    }
 }

@@ -27,3 +27,9 @@ rapidapi:
   remove-bg:
     url: https://ai-background-remover.p.rapidapi.com/image/matte/v1
     host: ai-background-remover.p.rapidapi.com
+
+
+cloudinary:
+  cloud-name: dwy6gb0gn
+  api-key: 973672632453524
+  api-secret: TJU2HYli0JLnmYLSqEbvytBgNJ4
